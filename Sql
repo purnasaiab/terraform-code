@@ -1,37 +1,36 @@
 SELECT 
-    p.name,
-    p.started_date,
-    p.finished_date,
-    p.original_result,
-    p.duration_sec,
-    CONCAT(
-        'https://dev.azure.com/',
-        JSON_UNQUOTE(JSON_EXTRACT(p._raw_data_params, '$.OrganizationId')),
-        '/',
-        JSON_UNQUOTE(JSON_EXTRACT(p._raw_data_params, '$.ProjectId')),
-        '/_build/results?buildId=',
-        SUBSTRING_INDEX(p.id, ':', -1),
-        '&view=results'
-    ) AS azure_devops_url,
-    CASE
-        WHEN MAX(CASE WHEN t.name = 'DEV Deployment' THEN 1 END) = 1 THEN 'DEV Deployed'
-        WHEN MAX(CASE WHEN t.name = 'QA Deployment' THEN 1 END) = 1 THEN 'QA Deployed'
-        WHEN MAX(CASE WHEN t.name = 'UAT Deployment' THEN 1 END) = 1 THEN 'UAT Deployed'
-        WHEN MAX(CASE WHEN t.name = 'PROD Deployment' THEN 1 END) = 1 THEN 'PROD Deployed'
-        ELSE 'No Deployment'
-    END AS deployment_env
+  p.name,
+  p.started_date,
+  p.finished_date,
+  p.original_result,
+  p.duration_sec,
+  CONCAT(
+    'https://dev.azure.com/',
+    JSON_UNQUOTE(JSON_EXTRACT(p._raw_data_params, '$.OrganizationId')),
+    '/',
+    JSON_UNQUOTE(JSON_EXTRACT(p._raw_data_params, '$.ProjectId')),
+    '/_build/results?buildId=',
+    SUBSTRING_INDEX(p.id, ':', -1),
+    '&view=results'
+  ) AS azure_devops_url,
+  CASE
+    WHEN SUM(t.name = 'DEV Deployment')  > 0 THEN 'DEV Deployed'
+    WHEN SUM(t.name = 'QA Deployment')   > 0 THEN 'QA Deployed'
+    WHEN SUM(t.name = 'UAT Deployment')  > 0 THEN 'UAT Deployed'
+    WHEN SUM(t.name = 'PROD Deployment') > 0 THEN 'PROD Deployed'
+    ELSE 'No Deployment'
+  END AS deployment_env
 FROM lake.cicd_pipelines p
 LEFT JOIN lake.cicd_tasks t
-    ON p.id = t.pipeline_id
-WHERE p.cicd_scope_id IN (${repo_id})
-  AND p.started_date BETWEEN FROM_UNIXTIME(${_from}/1000) 
-                          AND FROM_UNIXTIME(${_to}/1000)
-GROUP BY 
-    p.name,
-    p.started_date,
-    p.finished_date,
-    p.original_result,
-    p.duration_sec,
-    p._raw_data_params,
-    p.id
+  ON p.id = t.pipeline_id
+WHERE p.cicd_scope_id IN ( /* replace with comma-separated numeric ids, e.g. 123,456 */ ${repo_id} )
+  AND p.started_date BETWEEN FROM_UNIXTIME(${_from}/1000) AND FROM_UNIXTIME(${_to}/1000)
+GROUP BY
+  p.id,
+  p.name,
+  p.started_date,
+  p.finished_date,
+  p.original_result,
+  p.duration_sec,
+  p._raw_data_params
 ORDER BY p.started_date DESC;
